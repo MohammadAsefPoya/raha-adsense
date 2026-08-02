@@ -126,25 +126,81 @@ final class RahaAdsenseApi {
     }
   }
 
-  Future<RahaTrackingResult> track(
+  Future<RahaTrackingResult> trackImpression(
     Uri uri, {
     required String eventId,
     CancelToken? cancelToken,
   }) async {
-    final separator = uri.hasQuery ? '&' : '?';
-    final trackedUri = Uri.parse(
-      '$uri${separator}eventId=${Uri.encodeQueryComponent(eventId)}',
+    return _track(
+      uri,
+      eventId: eventId,
+      expectedType: 'impression',
+      cancelToken: cancelToken,
     );
+  }
+
+  Future<RahaTrackingResult> trackClick(
+    Uri uri, {
+    required String eventId,
+    CancelToken? cancelToken,
+  }) async {
+    return _track(
+      uri,
+      eventId: eventId,
+      expectedType: 'click',
+      cancelToken: cancelToken,
+    );
+  }
+
+  Future<RahaTrackingResult> _track(
+    Uri uri, {
+    required String eventId,
+    required String expectedType,
+    CancelToken? cancelToken,
+  }) async {
+    final trackedUri = _appendEventId(uri, eventId);
     final response = await _guardNetwork(
       () => withOneRetry<Response<String>>(
         () => _dio.getUri<String>(trackedUri, cancelToken: cancelToken),
         cancelToken: cancelToken,
       ),
     );
+    if (response.statusCode == 204) {
+      return RahaTrackingResult.normalized(
+        json: const <String, Object?>{},
+        eventId: eventId,
+        type: expectedType,
+      );
+    }
     _requireStatus(response, 200);
-    return RahaTrackingResult.fromJson(
-      _decodeObject(response.data, maxBytes: 64 * 1024, label: 'tracking'),
-    );
+
+    final raw = response.data?.trim();
+    if (raw == null || raw.isEmpty) {
+      return RahaTrackingResult.normalized(
+        json: const <String, Object?>{},
+        eventId: eventId,
+        type: expectedType,
+      );
+    }
+
+    try {
+      return RahaTrackingResult.normalized(
+        json: _decodeObject(raw, maxBytes: 64 * 1024, label: 'tracking'),
+        eventId: eventId,
+        type: expectedType,
+      );
+    } on RahaAdsException catch (error) {
+      _logMalformedTracking(response, expectedType);
+      throw error;
+    } on FormatException catch (error) {
+      _logMalformedTracking(response, expectedType);
+      throw RahaAdsException(
+        RahaAdsErrorCode.malformedResponse,
+        'Malformed tracking response.',
+        statusCode: response.statusCode,
+        cause: error,
+      );
+    }
   }
 
   void dispose() => _dio.close(force: true);
@@ -276,4 +332,23 @@ String _describeDioError(DioException error) {
     parts.add(cause.toString());
   }
   return parts.join(' | ');
+}
+
+void _logMalformedTracking(Response<dynamic> response, String expectedType) {
+  if (!kDebugMode) return;
+  final contentType = response.headers.value(Headers.contentTypeHeader);
+  debugPrint(
+    '[Raha Adsense] tracking $expectedType response malformed: '
+    'HTTP ${response.statusCode}, content-type ${contentType ?? 'unknown'}',
+  );
+}
+
+Uri _appendEventId(Uri uri, String eventId) {
+  final withoutFragment = uri.removeFragment().toString();
+  final separator = uri.hasQuery ? '&' : '?';
+  final fragment = uri.hasFragment ? '#${uri.fragment}' : '';
+  return Uri.parse(
+    '$withoutFragment${separator}eventId='
+    '${Uri.encodeQueryComponent(eventId)}$fragment',
+  );
 }

@@ -241,14 +241,18 @@ final class RahaTrackingResult {
     this.redirectUrl,
   });
 
-  factory RahaTrackingResult.fromJson(Map<String, Object?> json) {
+  factory RahaTrackingResult.normalized({
+    required Map<String, Object?> json,
+    required String eventId,
+    required String type,
+  }) {
     return RahaTrackingResult(
-      eventId: _nonEmptyString(json['eventId'], 'eventId'),
-      type: _nonEmptyString(json['type'], 'type'),
-      isValid: _bool(json['isValid'], 'isValid'),
-      duplicate: _bool(json['duplicate'], 'duplicate'),
+      eventId: _optionalNonEmptyString(json['eventId'], 'eventId') ?? eventId,
+      type: _optionalNonEmptyString(json['type'], 'type') ?? type,
+      isValid: _optionalBool(json['isValid'], 'isValid') ?? true,
+      duplicate: _optionalBool(json['duplicate'], 'duplicate') ?? false,
       invalidReason: json['invalidReason'] as String?,
-      redirectUrl: json['redirectUrl'] as String?,
+      redirectUrl: _optionalNonEmptyString(json['redirectUrl'], 'redirectUrl'),
     );
   }
 
@@ -335,4 +339,9 @@ double? _doubleOrNull(Object? value) {
 bool _bool(Object? value, String name) {
   if (value is bool) return value;
   throw FormatException('Expected boolean for $name.');
+}
+
+bool? _optionalBool(Object? value, String name) {
+  if (value == null) return null;
+  return _bool(value, name);
 }

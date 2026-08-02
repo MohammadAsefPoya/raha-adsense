@@ -314,7 +314,7 @@ final class RahaAdsenseRuntime {
   }
 
   Future<void> _recordImpression(RahaResolvedAd ad) async {
-    final result = await _api.track(
+    final result = await _api.trackImpression(
       ad.impressionUri,
       eventId: ad.impressionEventId,
     );
@@ -327,7 +327,10 @@ final class RahaAdsenseRuntime {
   }
 
   Future<void> _openClick(RahaResolvedAd ad) async {
-    final result = await _api.track(ad.clickTrackingUri, eventId: _uuid.v4());
+    final result = await _api.trackClick(
+      ad.clickTrackingUri,
+      eventId: _uuid.v4(),
+    );
     if (!result.isValid) {
       throw RahaAdsException(
         RahaAdsErrorCode.trackingRejected,
