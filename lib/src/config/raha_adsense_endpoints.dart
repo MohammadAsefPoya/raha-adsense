@@ -8,8 +8,8 @@ final class RahaAdsenseEndpoints {
 
   static final RahaAdsenseEndpoints production =
       RahaAdsenseEndpoints._validated(
-    apiOrigin: Uri.parse('https://ads.raha.net'),
-    cdnBaseUrl: Uri.parse('https://cdn.raha.net/adsense/'),
+    apiOrigin: Uri.parse('https://dev.api.adsense.raha.af'),
+    cdnBaseUrl: Uri.parse('https://dev.cdn.raha.af/adsense/'),
     allowInsecureHttp: false,
   );
 
@@ -59,8 +59,8 @@ final class RahaAdsenseEndpoints {
     required bool allowInsecureHttp,
   }) {
     final scheme = value.scheme.toLowerCase();
-    final validScheme = scheme == 'https' ||
-        (allowInsecureHttp && scheme == 'http');
+    final validScheme =
+        scheme == 'https' || (allowInsecureHttp && scheme == 'http');
     final hasDisallowedPath =
         !allowPath && value.path.isNotEmpty && value.path != '/';
 
