@@ -1,5 +1,6 @@
 library raha_adsense;
 
+export 'src/core/click_opener.dart' show RahaClickOpener;
 export 'src/core/raha_adsense.dart';
 export 'src/errors/raha_adsense_exception.dart'
     show RahaAdsErrorCode, RahaAdsException;

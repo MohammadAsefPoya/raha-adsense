@@ -70,24 +70,15 @@ final class RahaAdsenseRuntime {
     CancelToken? cancelToken,
   }) async {
     final registry = await _getRegistry(cancelToken: cancelToken);
-    print(registry);
     final placement = registry.resolveVideo();
-    print(placement);
-    print(signals);
-    print(cancelToken);
     final decision = await _requestDecision(
       placement: placement,
       signals: signals,
       cancelToken: cancelToken,
     );
-    print(decision?.asset);
-    print(decision?.clickTrackingUrl);
-    print(decision?.clickUrl);
     if (decision == null) return null;
     final resolved = _resolveCommon(placement, decision);
-    print("Resolve info ${resolved.info}");
     final asset = _requireVideoAsset(decision);
-    print("Asset ${asset.url} ${asset.posterUrl} ${asset.duration}");
     return buildRahaVideoAdResponse(
       info: resolved.info,
       isClickable: resolved.isClickable,
@@ -344,9 +335,55 @@ final class RahaAdsenseRuntime {
       );
     }
     final redirect = result.redirectUrl;
-    if (redirect == null || redirect.trim().isEmpty) return;
-    final uri = Uri.parse(redirect);
-    final launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    final uri = _parseTrackedRedirect(redirect);
+    final opener = config.clickOpener ?? _launchWithUrlLauncher;
+    try {
+      await Future<void>.sync(() => opener(uri, ad.info));
+    } on RahaAdsException {
+      rethrow;
+    } on Object catch (error) {
+      throw RahaAdsException(
+        RahaAdsErrorCode.clickLaunch,
+        'Custom Raha click opener failed.',
+        cause: error,
+      );
+    }
+  }
+
+  Uri _parseTrackedRedirect(String? value) {
+    if (value == null || value.trim().isEmpty) {
+      throw const RahaAdsException(
+        RahaAdsErrorCode.clickLaunch,
+        'Raha click tracking did not return a destination URL.',
+      );
+    }
+    final Uri uri;
+    try {
+      uri = Uri.parse(value.trim());
+    } on FormatException catch (error) {
+      throw RahaAdsException(
+        RahaAdsErrorCode.clickLaunch,
+        'Malformed Raha click destination URL.',
+        cause: error,
+      );
+    }
+    if (!uri.isAbsolute ||
+        uri.scheme.toLowerCase() != 'https' ||
+        uri.host.isEmpty ||
+        uri.userInfo.isNotEmpty) {
+      throw const RahaAdsException(
+        RahaAdsErrorCode.clickLaunch,
+        'Invalid Raha click destination URL.',
+      );
+    }
+    return uri;
+  }
+
+  Future<void> _launchWithUrlLauncher(Uri destinationUrl, RahaAdInfo _) async {
+    final launched = await launchUrl(
+      destinationUrl,
+      mode: LaunchMode.externalApplication,
+    );
     if (!launched) {
       throw const RahaAdsException(
         RahaAdsErrorCode.clickLaunch,

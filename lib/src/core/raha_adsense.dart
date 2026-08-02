@@ -4,6 +4,7 @@ import '../config/raha_adsense_config.dart';
 import '../errors/raha_adsense_exception.dart';
 import '../models/ad_response.dart';
 import '../models/models.dart';
+import 'click_opener.dart';
 import 'raha_adsense_runtime.dart';
 
 abstract final class RahaAdsense {
@@ -11,12 +12,18 @@ abstract final class RahaAdsense {
 
   static bool get isReady => _runtime != null;
 
-  static Future<void> setup({required String appId}) async {
+  static Future<void> setup({
+    required String appId,
+    RahaClickOpener? clickOpener,
+  }) async {
     if (_runtime != null) {
       throw StateError('RahaAdsense.setup() may be called only once.');
     }
     final runtime = RahaAdsenseRuntime(
-      config: RahaAdsenseConfig.production(appId: appId),
+      config: RahaAdsenseConfig.production(
+        appId: appId,
+        clickOpener: clickOpener,
+      ),
     );
     try {
       await runtime.initialize();

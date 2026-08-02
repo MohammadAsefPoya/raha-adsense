@@ -1,9 +1,13 @@
 import 'package:flutter/foundation.dart';
 
+import '../core/click_opener.dart';
 import 'raha_adsense_endpoints.dart';
 
 final class RahaAdsenseConfig {
-  RahaAdsenseConfig.production({required this.appId})
+  RahaAdsenseConfig.production({
+    required this.appId,
+    this.clickOpener,
+  })
       : endpoints = RahaAdsenseEndpoints.production,
         enableDebugLogs = kDebugMode,
         requestTimeout = const Duration(seconds: 9),
@@ -13,12 +17,14 @@ final class RahaAdsenseConfig {
   const RahaAdsenseConfig.forTesting({
     required this.appId,
     required this.endpoints,
+    this.clickOpener,
     this.enableDebugLogs = false,
     this.requestTimeout = const Duration(seconds: 9),
     this.inventoryTtl = const Duration(minutes: 5),
   });
 
   final String appId;
+  final RahaClickOpener? clickOpener;
   final RahaAdsenseEndpoints endpoints;
   final bool enableDebugLogs;
   final Duration requestTimeout;
