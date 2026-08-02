@@ -70,15 +70,24 @@ final class RahaAdsenseRuntime {
     CancelToken? cancelToken,
   }) async {
     final registry = await _getRegistry(cancelToken: cancelToken);
+    print(registry);
     final placement = registry.resolveVideo();
+    print(placement);
+    print(signals);
+    print(cancelToken);
     final decision = await _requestDecision(
       placement: placement,
       signals: signals,
       cancelToken: cancelToken,
     );
+    print(decision?.asset);
+    print(decision?.clickTrackingUrl);
+    print(decision?.clickUrl);
     if (decision == null) return null;
     final resolved = _resolveCommon(placement, decision);
+    print("Resolve info ${resolved.info}");
     final asset = _requireVideoAsset(decision);
+    print("Asset ${asset.url} ${asset.posterUrl} ${asset.duration}");
     return buildRahaVideoAdResponse(
       info: resolved.info,
       isClickable: resolved.isClickable,
