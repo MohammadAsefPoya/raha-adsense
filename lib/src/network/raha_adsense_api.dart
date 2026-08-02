@@ -45,10 +45,13 @@ Dio buildRahaDio(RahaAdsenseConfig config) {
             config.enableDebugLogs &&
             !path.contains('/tracking/')) {
           final status = error.response?.statusCode;
-          final outcome = status == null ? error.type.name : 'HTTP $status';
+          final outcome = status == null
+              ? _describeDioError(error)
+              : 'HTTP $status';
           debugPrint(
             '[Raha Adsense] ${error.requestOptions.method} '
-            '${path.split('?').first} failed: $outcome',
+            '${error.requestOptions.uri.replace(query: '').toString()} '
+            'failed: $outcome',
           );
         }
         handler.next(error);
@@ -248,7 +251,11 @@ Future<T> _guardNetwork<T>(Future<T> Function() action) async {
         RahaAdsErrorCode.timeout,
       _ => RahaAdsErrorCode.network,
     };
-    throw RahaAdsException(code, 'Raha network request failed.', cause: error);
+    throw RahaAdsException(
+      code,
+      'Raha network request failed: ${_describeDioError(error)}.',
+      cause: error,
+    );
   } on FormatException catch (error) {
     throw RahaAdsException(
       RahaAdsErrorCode.invalidResponse,
@@ -256,4 +263,17 @@ Future<T> _guardNetwork<T>(Future<T> Function() action) async {
       cause: error,
     );
   }
+}
+
+String _describeDioError(DioException error) {
+  final parts = <String>[error.type.name];
+  final message = error.message;
+  if (message != null && message.trim().isNotEmpty) {
+    parts.add(message.trim());
+  }
+  final cause = error.error;
+  if (cause != null) {
+    parts.add(cause.toString());
+  }
+  return parts.join(' | ');
 }
