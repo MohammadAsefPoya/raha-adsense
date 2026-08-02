@@ -1,0 +1,418 @@
+import 'package:dio/dio.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:uuid/uuid.dart';
+
+import '../config/raha_adsense_config.dart';
+import '../errors/raha_adsense_exception.dart';
+import '../models/ad_response.dart';
+import '../models/models.dart';
+import '../network/raha_adsense_api.dart';
+import '../network/url_resolver.dart';
+import 'placement_registry.dart';
+
+final class RahaAdsenseRuntime {
+  RahaAdsenseRuntime({
+    required this.config,
+    RahaAdsenseApi? api,
+    RahaUrlResolver? resolver,
+  })  : _api = api ?? RahaAdsenseApi(dio: buildRahaDio(config)),
+        _resolver = resolver ?? RahaUrlResolver(config.endpoints);
+
+  final RahaAdsenseConfig config;
+  final RahaAdsenseApi _api;
+  final RahaUrlResolver _resolver;
+  final Uuid _uuid = const Uuid();
+
+  PlacementRegistry? _registry;
+  DateTime? _inventoryLoadedAt;
+  Future<PlacementRegistry>? _inventoryRefresh;
+  bool _disposed = false;
+
+  Future<void> initialize({CancelToken? cancelToken}) async {
+    _validateAppId(config.appId);
+    await _getRegistry(cancelToken: cancelToken, forceRefresh: true);
+  }
+
+  Future<RahaBannerAdResponse?> requestBannerAd({
+    required RahaBannerSize size,
+    required Map<String, Object?> signals,
+    CancelToken? cancelToken,
+  }) async {
+    final registry = await _getRegistry(cancelToken: cancelToken);
+    final placement = registry.resolveBanner(size);
+    final decision = await _requestDecision(
+      placement: placement,
+      signals: signals,
+      cancelToken: cancelToken,
+    );
+    if (decision == null) return null;
+    final resolved = _resolveCommon(placement, decision);
+    final asset = _requireImageAsset(decision, RahaAdDecisionFormat.banner);
+    if (asset.width != size.width || asset.height != size.height) {
+      throw const RahaAdsException(
+        RahaAdsErrorCode.unsupportedCreative,
+        'Banner creative dimensions do not match the requested size.',
+      );
+    }
+    return buildRahaBannerAdResponse(
+      info: resolved.info,
+      isClickable: resolved.isClickable,
+      imageUrl: _resolver.resolveAsset(asset.url),
+      width: asset.width,
+      height: asset.height,
+      recordImpression: () => _recordImpression(resolved),
+      openClick: () => _openClick(resolved),
+    );
+  }
+
+  Future<RahaVideoAdResponse?> requestVideoAd({
+    required Map<String, Object?> signals,
+    CancelToken? cancelToken,
+  }) async {
+    final registry = await _getRegistry(cancelToken: cancelToken);
+    final placement = registry.resolveVideo();
+    final decision = await _requestDecision(
+      placement: placement,
+      signals: signals,
+      cancelToken: cancelToken,
+    );
+    if (decision == null) return null;
+    final resolved = _resolveCommon(placement, decision);
+    final asset = _requireVideoAsset(decision);
+    return buildRahaVideoAdResponse(
+      info: resolved.info,
+      isClickable: resolved.isClickable,
+      videoUrl: _resolver.resolveAsset(asset.url),
+      posterUrl: _optionalAssetUrl(asset.posterUrl),
+      duration: Duration(seconds: asset.duration),
+      recordImpression: () => _recordImpression(resolved),
+      openClick: () => _openClick(resolved),
+    );
+  }
+
+  Future<RahaInterstitialAdResponse?> requestInterstitialAd({
+    required Map<String, Object?> signals,
+    CancelToken? cancelToken,
+  }) async {
+    final registry = await _getRegistry(cancelToken: cancelToken);
+    final placement = registry.resolveInterstitial();
+    final decision = await _requestDecision(
+      placement: placement,
+      signals: signals,
+      cancelToken: cancelToken,
+    );
+    if (decision == null) return null;
+    final resolved = _resolveCommon(placement, decision);
+    final asset = _requireImageAsset(
+      decision,
+      RahaAdDecisionFormat.interstitial,
+    );
+    return buildRahaInterstitialAdResponse(
+      info: resolved.info,
+      isClickable: resolved.isClickable,
+      imageUrl: _resolver.resolveAsset(asset.url),
+      width: asset.width,
+      height: asset.height,
+      recordImpression: () => _recordImpression(resolved),
+      openClick: () => _openClick(resolved),
+    );
+  }
+
+  Future<RahaNativeAdResponse?> requestNativeAd({
+    required Map<String, Object?> signals,
+    CancelToken? cancelToken,
+  }) async {
+    final registry = await _getRegistry(cancelToken: cancelToken);
+    final placement = registry.resolveNative();
+    final decision = await _requestDecision(
+      placement: placement,
+      signals: signals,
+      cancelToken: cancelToken,
+    );
+    if (decision == null) return null;
+    final resolved = _resolveCommon(placement, decision);
+    final asset = _requireNativeAsset(decision);
+    return buildRahaNativeAdResponse(
+      info: resolved.info,
+      isClickable: resolved.isClickable,
+      title: asset.title.trim(),
+      description: _optionalText(asset.description),
+      imageUrl: _optionalAssetUrl(asset.imageUrl),
+      iconUrl: _optionalAssetUrl(asset.iconUrl),
+      cta: _optionalText(asset.cta),
+      recordImpression: () => _recordImpression(resolved),
+      openClick: () => _openClick(resolved),
+    );
+  }
+
+  void dispose() {
+    _disposed = true;
+    _api.dispose();
+  }
+
+  Future<RahaAdDecisionDto?> _requestDecision({
+    required RahaPlacement placement,
+    required Map<String, Object?> signals,
+    CancelToken? cancelToken,
+  }) {
+    return _api.requestAd(
+      placementId: placement.id,
+      signals: signals,
+      cancelToken: cancelToken,
+    );
+  }
+
+  Future<PlacementRegistry> _getRegistry({
+    CancelToken? cancelToken,
+    bool forceRefresh = false,
+  }) async {
+    _ensureAlive();
+    final registry = _registry;
+    final loadedAt = _inventoryLoadedAt;
+    final fresh = loadedAt != null &&
+        DateTime.now().difference(loadedAt) < config.inventoryTtl;
+    if (!forceRefresh && registry != null && fresh) return registry;
+
+    return _inventoryRefresh ??= _refreshRegistry(cancelToken).whenComplete(
+      () => _inventoryRefresh = null,
+    );
+  }
+
+  Future<PlacementRegistry> _refreshRegistry(CancelToken? cancelToken) async {
+    final inventory = await _api.fetchInventory(cancelToken: cancelToken);
+    final matches = inventory.apps
+        .where((app) => app.id.toLowerCase() == config.appId.toLowerCase())
+        .toList(growable: false);
+    if (matches.isEmpty) {
+      throw RahaAdsException(
+        RahaAdsErrorCode.inventory,
+        'No approved Raha app inventory was found for app ${config.appId}.',
+      );
+    }
+    if (matches.length > 1) {
+      throw RahaAdsException(
+        RahaAdsErrorCode.inventory,
+        'Duplicate Raha app inventory was found for app ${config.appId}.',
+      );
+    }
+    final registry = PlacementRegistry(app: matches.single);
+    _validatePlacementUniqueness(registry);
+    _registry = registry;
+    _inventoryLoadedAt = DateTime.now();
+    return registry;
+  }
+
+  RahaResolvedAd _resolveCommon(
+    RahaPlacement placement,
+    RahaAdDecisionDto decision,
+  ) {
+    final expected = _expectedDecisionFormat(placement.format);
+    if (decision.format != expected) {
+      throw const RahaAdsException(
+        RahaAdsErrorCode.invalidResponse,
+        'Ad decision format does not match the resolved placement.',
+      );
+    }
+    _validateClickUrl(decision.clickUrl);
+    return RahaResolvedAd(
+      info: RahaAdInfo(
+        adId: decision.id,
+        format: decision.format.publicFormat,
+        placementId: placement.id,
+      ),
+      decision: decision,
+      impressionUri: _resolver.resolveTracking(decision.impressionUrl),
+      clickTrackingUri: _resolver.resolveTracking(decision.clickTrackingUrl),
+      impressionEventId: _uuid.v4(),
+      isClickable: decision.clickUrl != null,
+    );
+  }
+
+  RahaImageAdAssetDto _requireImageAsset(
+    RahaAdDecisionDto decision,
+    RahaAdDecisionFormat format,
+  ) {
+    if (decision.format != format || decision.asset is! RahaImageAdAssetDto) {
+      throw const RahaAdsException(
+        RahaAdsErrorCode.invalidResponse,
+        'Expected an image ad asset.',
+      );
+    }
+    return decision.asset as RahaImageAdAssetDto;
+  }
+
+  RahaVideoAdAssetDto _requireVideoAsset(RahaAdDecisionDto decision) {
+    if (decision.format != RahaAdDecisionFormat.video ||
+        decision.asset is! RahaVideoAdAssetDto) {
+      throw const RahaAdsException(
+        RahaAdsErrorCode.invalidResponse,
+        'Expected a video ad asset.',
+      );
+    }
+    return decision.asset as RahaVideoAdAssetDto;
+  }
+
+  RahaNativeAdAssetDto _requireNativeAsset(RahaAdDecisionDto decision) {
+    if (decision.format != RahaAdDecisionFormat.native ||
+        decision.asset is! RahaNativeAdAssetDto) {
+      throw const RahaAdsException(
+        RahaAdsErrorCode.invalidResponse,
+        'Expected a native ad asset.',
+      );
+    }
+    return decision.asset as RahaNativeAdAssetDto;
+  }
+
+  Uri? _optionalAssetUrl(String value) {
+    final normalized = value.trim();
+    if (normalized.isEmpty) return null;
+    return _resolver.resolveAsset(normalized);
+  }
+
+  String? _optionalText(String value) {
+    final normalized = value.trim();
+    return normalized.isEmpty ? null : normalized;
+  }
+
+  void _validateClickUrl(String? value) {
+    if (value == null) return;
+    final Uri uri;
+    try {
+      uri = Uri.parse(value);
+    } on FormatException catch (error) {
+      throw RahaAdsException(
+        RahaAdsErrorCode.invalidResponse,
+        'Malformed click URL in ad response.',
+        cause: error,
+      );
+    }
+    if (!uri.isAbsolute ||
+        uri.scheme.toLowerCase() != 'https' ||
+        uri.host.isEmpty ||
+        uri.userInfo.isNotEmpty) {
+      throw const RahaAdsException(
+        RahaAdsErrorCode.invalidResponse,
+        'Invalid click URL in ad response.',
+      );
+    }
+  }
+
+  RahaAdDecisionFormat _expectedDecisionFormat(
+    RahaInventoryPlacementFormat format,
+  ) {
+    return switch (format) {
+      RahaInventoryPlacementFormat.banner => RahaAdDecisionFormat.banner,
+      RahaInventoryPlacementFormat.video => RahaAdDecisionFormat.video,
+      RahaInventoryPlacementFormat.interstitial =>
+        RahaAdDecisionFormat.interstitial,
+      RahaInventoryPlacementFormat.native => RahaAdDecisionFormat.native,
+      RahaInventoryPlacementFormat.unknown => throw const RahaAdsException(
+          RahaAdsErrorCode.invalidResponse,
+          'Unsupported placement format.',
+        ),
+    };
+  }
+
+  Future<void> _recordImpression(RahaResolvedAd ad) async {
+    final result = await _api.track(
+      ad.impressionUri,
+      eventId: ad.impressionEventId,
+    );
+    if (!result.isValid) {
+      throw RahaAdsException(
+        RahaAdsErrorCode.trackingRejected,
+        'Raha rejected the impression event.',
+      );
+    }
+  }
+
+  Future<void> _openClick(RahaResolvedAd ad) async {
+    final result = await _api.track(ad.clickTrackingUri, eventId: _uuid.v4());
+    if (!result.isValid) {
+      throw RahaAdsException(
+        RahaAdsErrorCode.trackingRejected,
+        'Raha rejected the click event.',
+      );
+    }
+    final redirect = result.redirectUrl;
+    if (redirect == null || redirect.trim().isEmpty) return;
+    final uri = Uri.parse(redirect);
+    final launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!launched) {
+      throw const RahaAdsException(
+        RahaAdsErrorCode.clickLaunch,
+        'Unable to open Raha click destination.',
+      );
+    }
+  }
+
+  void _validatePlacementUniqueness(PlacementRegistry registry) {
+    for (final size in RahaBannerSize.values) {
+      _rejectDuplicateFormatSize(registry, size);
+    }
+    _rejectDuplicateFormat(registry, RahaInventoryPlacementFormat.video);
+    _rejectDuplicateFormat(registry, RahaInventoryPlacementFormat.native);
+    _rejectDuplicateFormat(
+      registry,
+      RahaInventoryPlacementFormat.interstitial,
+    );
+  }
+
+  void _rejectDuplicateFormatSize(
+    PlacementRegistry registry,
+    RahaBannerSize size,
+  ) {
+    final matches = registry.app.placements
+        .where(
+          (placement) =>
+              placement.format == RahaInventoryPlacementFormat.banner &&
+              placement.size?.trim().toLowerCase() == size.wireValue,
+        )
+        .length;
+    if (matches > 1) {
+      throw RahaAdsException(
+        RahaAdsErrorCode.ambiguousPlacement,
+        'Multiple banner placement ${size.wireValue} values are configured '
+        'for app ${registry.app.id}.',
+      );
+    }
+  }
+
+  void _rejectDuplicateFormat(
+    PlacementRegistry registry,
+    RahaInventoryPlacementFormat format,
+  ) {
+    final matches = registry.app.placements
+        .where((placement) => placement.format == format)
+        .length;
+    if (matches > 1) {
+      throw RahaAdsException(
+        RahaAdsErrorCode.ambiguousPlacement,
+        'Multiple ${format.name} placement values are configured for app '
+        '${registry.app.id}.',
+      );
+    }
+  }
+
+  void _validateAppId(String value) {
+    final pattern = RegExp(
+      r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-'
+      r'[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$',
+    );
+    if (!pattern.hasMatch(value)) {
+      throw const RahaAdsException(
+        RahaAdsErrorCode.invalidConfiguration,
+        'Raha appId must be a valid UUID.',
+      );
+    }
+  }
+
+  void _ensureAlive() {
+    if (_disposed) {
+      throw const RahaAdsException(
+        RahaAdsErrorCode.notInitialized,
+        'This RahaAdsense runtime has been disposed.',
+      );
+    }
+  }
+}

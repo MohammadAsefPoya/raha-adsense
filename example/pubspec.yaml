@@ -1,0 +1,24 @@
+name: raha_adsense_example
+description: Example application for the Raha Adsense Flutter package.
+publish_to: none
+version: 1.0.0+1
+
+environment:
+  sdk: ">=3.5.0 <4.0.0"
+  flutter: ">=3.24.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  raha_adsense:
+    path: ../
+  video_player: ^2.9.2
+  visibility_detector: ^0.4.0+2
+
+dev_dependencies:
+  flutter_lints: ^5.0.0
+  flutter_test:
+    sdk: flutter
+
+flutter:
+  uses-material-design: true
