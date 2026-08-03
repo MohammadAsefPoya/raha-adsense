@@ -65,4 +65,15 @@ void main() {
     expect(result.isValid, isFalse);
     expect(result.invalidReason, 'invalid_ad_id');
   });
+
+  test('normalizes redirect location tracking JSON', () {
+    final result = RahaTrackingResult.normalized(
+      json: const {'redirectUrl': 'https://advertiser.example.com/path'},
+      eventId: 'click-event',
+      type: 'click',
+    );
+
+    expect(result.isValid, isTrue);
+    expect(result.redirectUrl, 'https://advertiser.example.com/path');
+  });
 }

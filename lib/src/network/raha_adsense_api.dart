@@ -135,6 +135,7 @@ final class RahaAdsenseApi {
       uri,
       eventId: eventId,
       expectedType: 'impression',
+      captureRedirect: false,
       cancelToken: cancelToken,
     );
   }
@@ -148,6 +149,7 @@ final class RahaAdsenseApi {
       uri,
       eventId: eventId,
       expectedType: 'click',
+      captureRedirect: true,
       cancelToken: cancelToken,
     );
   }
@@ -156,15 +158,47 @@ final class RahaAdsenseApi {
     Uri uri, {
     required String eventId,
     required String expectedType,
+    required bool captureRedirect,
     CancelToken? cancelToken,
   }) async {
     final trackedUri = _appendEventId(uri, eventId);
     final response = await _guardNetwork(
       () => withOneRetry<Response<String>>(
-        () => _dio.getUri<String>(trackedUri, cancelToken: cancelToken),
+        () => _dio.getUri<String>(
+          trackedUri,
+          cancelToken: cancelToken,
+          options: Options(
+            followRedirects: !captureRedirect,
+            validateStatus: captureRedirect
+                ? (status) =>
+                    status != null &&
+                    (status == 200 ||
+                        status == 204 ||
+                        _isRedirectStatus(status))
+                : null,
+          ),
+        ),
         cancelToken: cancelToken,
       ),
     );
+    if (captureRedirect && _isRedirectStatus(response.statusCode)) {
+      final location = response.headers.value(Headers.locationHeader);
+      final redirectUri = _resolveRedirectLocation(trackedUri, location);
+      if (redirectUri != null) {
+        return RahaTrackingResult.normalized(
+          json: <String, Object?>{
+            'redirectUrl': redirectUri.toString(),
+          },
+          eventId: eventId,
+          type: expectedType,
+        );
+      }
+      return RahaTrackingResult.normalized(
+        json: const <String, Object?>{},
+        eventId: eventId,
+        type: expectedType,
+      );
+    }
     if (response.statusCode == 204) {
       return RahaTrackingResult.normalized(
         json: const <String, Object?>{},
@@ -191,9 +225,23 @@ final class RahaAdsenseApi {
       );
     } on RahaAdsException catch (error) {
       _logMalformedTracking(response, expectedType);
+      if (captureRedirect) {
+        return RahaTrackingResult.normalized(
+          json: const <String, Object?>{},
+          eventId: eventId,
+          type: expectedType,
+        );
+      }
       throw error;
     } on FormatException catch (error) {
       _logMalformedTracking(response, expectedType);
+      if (captureRedirect) {
+        return RahaTrackingResult.normalized(
+          json: const <String, Object?>{},
+          eventId: eventId,
+          type: expectedType,
+        );
+      }
       throw RahaAdsException(
         RahaAdsErrorCode.malformedResponse,
         'Malformed tracking response.',
@@ -351,4 +399,24 @@ Uri _appendEventId(Uri uri, String eventId) {
     '$withoutFragment${separator}eventId='
     '${Uri.encodeQueryComponent(eventId)}$fragment',
   );
+}
+
+bool _isRedirectStatus(int? statusCode) {
+  return statusCode == 301 ||
+      statusCode == 302 ||
+      statusCode == 303 ||
+      statusCode == 307 ||
+      statusCode == 308;
+}
+
+Uri? _resolveRedirectLocation(Uri requestUri, String? location) {
+  if (location == null || location.trim().isEmpty) return null;
+  final raw = location.trim();
+  if (raw.startsWith('//')) return null;
+  try {
+    final uri = Uri.parse(raw);
+    return uri.hasScheme ? uri : requestUri.resolveUri(uri);
+  } on FormatException {
+    return null;
+  }
 }
