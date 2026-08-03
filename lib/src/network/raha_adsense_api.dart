@@ -45,9 +45,8 @@ Dio buildRahaDio(RahaAdsenseConfig config) {
             config.enableDebugLogs &&
             !path.contains('/tracking/')) {
           final status = error.response?.statusCode;
-          final outcome = status == null
-              ? _describeDioError(error)
-              : 'HTTP $status';
+          final outcome =
+              status == null ? _describeDioError(error) : 'HTTP $status';
           debugPrint(
             '[Raha Adsense] ${error.requestOptions.method} '
             '${error.requestOptions.uri.replace(query: '').toString()} '
@@ -274,7 +273,7 @@ final class RahaAdsenseApi {
         eventId: eventId,
         type: expectedType,
       );
-    } on RahaAdsException catch (error) {
+    } on RahaAdsException catch (_) {
       _logMalformedTracking(response, expectedType);
       return RahaTrackingResult.normalized(
         json: const <String, Object?>{},

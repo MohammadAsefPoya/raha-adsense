@@ -7,8 +7,7 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   await RahaAdsense.setup(
-    // appId: const String.fromEnvironment('RAHA_ADSENSE_APP_ID'),
-    appId: "ee49d3ed-301a-4871-a66b-8aaeb0bd2394",
+    appId: const String.fromEnvironment('RAHA_ADSENSE_APP_ID'),
   );
 
   runApp(const ExampleApp());
