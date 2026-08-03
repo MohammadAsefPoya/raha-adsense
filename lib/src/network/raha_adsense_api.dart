@@ -182,7 +182,7 @@ final class RahaAdsenseApi {
       ),
     );
     if (captureRedirect && _isRedirectStatus(response.statusCode)) {
-      final location = response.headers.value(Headers.locationHeader);
+      final location = response.headers.value('location');
       final redirectUri = _resolveRedirectLocation(trackedUri, location);
       if (redirectUri != null) {
         return RahaTrackingResult.normalized(
