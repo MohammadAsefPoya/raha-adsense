@@ -145,13 +145,64 @@ final class RahaAdsenseApi {
     required String eventId,
     CancelToken? cancelToken,
   }) async {
-    return _track(
-      uri,
-      eventId: eventId,
-      expectedType: 'click',
-      captureRedirect: true,
-      cancelToken: cancelToken,
+    final trackedUri = _appendEventId(uri, eventId);
+    final response = await _guardNetwork(
+      () => withOneRetry<Response<String>>(
+        () => _dio.getUri<String>(
+          trackedUri,
+          cancelToken: cancelToken,
+          options: Options(
+            followRedirects: false,
+            validateStatus: (status) =>
+                status != null &&
+                (status == 200 || status == 204 || _isRedirectStatus(status)),
+          ),
+        ),
+        cancelToken: cancelToken,
+      ),
     );
+
+    if (_isRedirectStatus(response.statusCode)) {
+      final redirectUri = _resolveRedirectLocation(
+        trackedUri,
+        response.headers.value('location'),
+      );
+      return _normalizedClickTrackingResult(
+        eventId: eventId,
+        redirectUrl: redirectUri?.toString(),
+      );
+    }
+
+    if (response.statusCode == 204) {
+      return _normalizedClickTrackingResult(eventId: eventId);
+    }
+    _requireStatus(response, 200);
+
+    final raw = response.data?.trim();
+    if (raw == null || raw.isEmpty) {
+      return _normalizedClickTrackingResult(eventId: eventId);
+    }
+
+    final parsed = _tryDecodeObject(raw);
+    if (parsed == null) {
+      _logMalformedTracking(response, 'click');
+      final redirectUri = _tryParseAbsoluteHttpsUri(raw);
+      return _normalizedClickTrackingResult(
+        eventId: eventId,
+        redirectUrl: redirectUri?.toString(),
+      );
+    }
+
+    try {
+      return RahaTrackingResult.normalized(
+        json: parsed,
+        eventId: eventId,
+        type: 'click',
+      );
+    } on FormatException {
+      _logMalformedTracking(response, 'click');
+      return _normalizedClickTrackingResult(eventId: eventId);
+    }
   }
 
   Future<RahaTrackingResult> _track(
@@ -225,33 +276,63 @@ final class RahaAdsenseApi {
       );
     } on RahaAdsException catch (error) {
       _logMalformedTracking(response, expectedType);
-      if (captureRedirect) {
-        return RahaTrackingResult.normalized(
-          json: const <String, Object?>{},
-          eventId: eventId,
-          type: expectedType,
-        );
-      }
-      throw error;
+      return RahaTrackingResult.normalized(
+        json: const <String, Object?>{},
+        eventId: eventId,
+        type: expectedType,
+      );
     } on FormatException catch (error) {
       _logMalformedTracking(response, expectedType);
-      if (captureRedirect) {
-        return RahaTrackingResult.normalized(
-          json: const <String, Object?>{},
-          eventId: eventId,
-          type: expectedType,
-        );
-      }
-      throw RahaAdsException(
-        RahaAdsErrorCode.malformedResponse,
-        'Malformed tracking response.',
-        statusCode: response.statusCode,
-        cause: error,
+      final _ = error;
+      return RahaTrackingResult.normalized(
+        json: const <String, Object?>{},
+        eventId: eventId,
+        type: expectedType,
       );
     }
   }
 
   void dispose() => _dio.close(force: true);
+}
+
+RahaTrackingResult _normalizedClickTrackingResult({
+  required String eventId,
+  String? redirectUrl,
+}) {
+  return RahaTrackingResult.normalized(
+    json: <String, Object?>{
+      if (redirectUrl != null && redirectUrl.trim().isNotEmpty)
+        'redirectUrl': redirectUrl,
+    },
+    eventId: eventId,
+    type: 'click',
+  );
+}
+
+Map<String, Object?>? _tryDecodeObject(String raw) {
+  try {
+    final decoded = jsonDecode(raw);
+    if (decoded is Map<String, Object?>) return decoded;
+    if (decoded is Map) return decoded.cast<String, Object?>();
+    return null;
+  } on Object {
+    return null;
+  }
+}
+
+Uri? _tryParseAbsoluteHttpsUri(String raw) {
+  try {
+    final uri = Uri.parse(raw.trim());
+    if (!uri.isAbsolute ||
+        uri.scheme.toLowerCase() != 'https' ||
+        uri.host.isEmpty ||
+        uri.userInfo.isNotEmpty) {
+      return null;
+    }
+    return uri;
+  } on FormatException {
+    return null;
+  }
 }
 
 Map<String, Object?> validateAndNormalizePublisherSignals(
