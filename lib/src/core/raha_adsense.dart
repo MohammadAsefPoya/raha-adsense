@@ -7,11 +7,20 @@ import '../models/models.dart';
 import 'click_opener.dart';
 import 'raha_adsense_runtime.dart';
 
+/// Entry point for the Raha Adsense Flutter SDK.
+///
+/// This class provides the public setup and ad request APIs for the package.
 abstract final class RahaAdsense {
   static RahaAdsenseRuntime? _runtime;
 
+  /// Returns `true` after the SDK has been initialized with [setup].
   static bool get isReady => _runtime != null;
 
+  /// Initialize the Raha SDK with the provided [appId].
+  ///
+  /// The [appId] is the Raha application identifier used to fetch inventory
+  /// and placement metadata. Optionally pass [clickOpener] to handle ad click
+  /// navigation in a custom shell.
   static Future<void> setup({
     required String appId,
     RahaClickOpener? clickOpener,
@@ -34,6 +43,10 @@ abstract final class RahaAdsense {
     }
   }
 
+  /// Request a single ad response for the selected ad [type].
+  ///
+  /// For banner requests, provide [bannerSize]. For other ad formats,
+  /// [bannerSize] must be omitted.
   static Future<RahaAdResponse?> adRequest({
     required RahaAdFormat type,
     RahaBannerSize? bannerSize,
@@ -64,6 +77,9 @@ abstract final class RahaAdsense {
     };
   }
 
+  /// Returns the active runtime instance.
+  ///
+  /// Throws [RahaAdsException] if the package has not yet been initialized.
   static RahaAdsenseRuntime get runtime {
     final value = _runtime;
     if (value == null) {
@@ -77,6 +93,8 @@ abstract final class RahaAdsense {
 
   @visibleForTesting
   static void resetForTesting() {
+    // Dispose and clear the cached runtime so tests can start from a clean
+    // state between runs.
     _runtime?.dispose();
     _runtime = null;
   }

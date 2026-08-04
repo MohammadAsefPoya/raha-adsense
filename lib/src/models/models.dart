@@ -16,6 +16,7 @@ enum RahaInventoryPlacementFormat {
   }
 }
 
+/// Public ad formats supported by the Raha SDK.
 enum RahaAdFormat { banner, video, interstitial, native }
 
 enum RahaAdDecisionFormat {
@@ -44,6 +45,7 @@ enum RahaAdDecisionFormat {
   }
 }
 
+/// Standard banner sizes that can be requested from the Raha SDK.
 enum RahaBannerSize {
   leaderboard728x90(width: 728, height: 90),
   mediumRectangle300x250(width: 300, height: 250),
@@ -58,6 +60,9 @@ enum RahaBannerSize {
   String get wireValue => '${width}x$height';
 }
 
+/// Inventory payload returned by the Raha inventory endpoint.
+///
+/// Includes the list of publisher apps and their supported placements.
 final class RahaInventoryResponse {
   const RahaInventoryResponse({this.apps = const <RahaPublisherApp>[]});
 
@@ -72,6 +77,7 @@ final class RahaInventoryResponse {
   final List<RahaPublisherApp> apps;
 }
 
+/// Describes a publisher application in the Raha inventory.
 final class RahaPublisherApp {
   const RahaPublisherApp({
     required this.id,
@@ -103,6 +109,7 @@ final class RahaPublisherApp {
   final List<RahaPlacement> placements;
 }
 
+/// Placement metadata used to match ad requests to inventory.
 final class RahaPlacement {
   const RahaPlacement({
     required this.id,
@@ -132,10 +139,12 @@ final class RahaPlacement {
   final String currency;
 }
 
+/// Internal asset representation for ad decision payloads.
 sealed class RahaAdAssetDto {
   const RahaAdAssetDto();
 }
 
+/// Image asset used for banner and interstitial ad decisions.
 final class RahaImageAdAssetDto extends RahaAdAssetDto {
   const RahaImageAdAssetDto({
     required this.url,
@@ -148,6 +157,7 @@ final class RahaImageAdAssetDto extends RahaAdAssetDto {
   final int height;
 }
 
+/// Video asset used for video ad decisions.
 final class RahaVideoAdAssetDto extends RahaAdAssetDto {
   const RahaVideoAdAssetDto({
     required this.url,
@@ -160,6 +170,7 @@ final class RahaVideoAdAssetDto extends RahaAdAssetDto {
   final int duration;
 }
 
+/// Native creative asset used for native ad decisions.
 final class RahaNativeAdAssetDto extends RahaAdAssetDto {
   const RahaNativeAdAssetDto({
     required this.title,
@@ -176,6 +187,7 @@ final class RahaNativeAdAssetDto extends RahaAdAssetDto {
   final String cta;
 }
 
+/// The server-side decision payload for a single ad request.
 final class RahaAdDecisionDto {
   const RahaAdDecisionDto({
     required this.id,
@@ -231,6 +243,7 @@ final class RahaAdDecisionDto {
   final RahaAdAssetDto asset;
 }
 
+/// Normalized tracking result returned from impression or click endpoints.
 final class RahaTrackingResult {
   const RahaTrackingResult({
     required this.eventId,

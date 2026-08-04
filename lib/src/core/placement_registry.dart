@@ -1,6 +1,10 @@
 import '../errors/raha_adsense_exception.dart';
 import '../models/models.dart';
 
+/// Resolves available placements for a configured Raha publisher app.
+///
+/// The registry maps inventory placements to the proper ad format and size
+/// requirements used by the SDK to request decisions.
 final class PlacementRegistry {
   PlacementRegistry({required this.app});
 

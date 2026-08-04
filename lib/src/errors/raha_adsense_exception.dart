@@ -1,3 +1,4 @@
+/// Coded error conditions produced by the Raha SDK.
 enum RahaAdsErrorCode {
   invalidConfiguration,
   notInitialized,
@@ -17,6 +18,7 @@ enum RahaAdsErrorCode {
   layout,
 }
 
+/// Represents an error returned by the Raha SDK.
 final class RahaAdsException implements Exception {
   const RahaAdsException(
     this.code,

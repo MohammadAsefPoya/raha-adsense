@@ -1,3 +1,9 @@
+/// Raha Adsense Flutter SDK.
+///
+/// This package exposes a stable, easy-to-use SDK surface for Raha ads,
+/// including banners, video, interstitials, and native placements.
+///
+/// Use [RahaAdsense.setup] to initialize the SDK before requesting ads.
 library raha_adsense;
 
 export 'src/core/click_opener.dart' show RahaClickOpener;

@@ -1,6 +1,10 @@
 import '../errors/raha_adsense_exception.dart';
 import 'models.dart';
 
+/// Base response object for a Raha ad.
+///
+/// This sealed class provides common ad metadata and actions for recording
+/// impressions and opening click destinations.
 sealed class RahaAdResponse {
   RahaAdResponse._({
     required this.info,
@@ -10,17 +14,22 @@ sealed class RahaAdResponse {
   })  : _recordImpression = recordImpression,
         _openClick = openClick;
 
+  /// Shared ad metadata, including placement and format information.
   final RahaAdInfo info;
+
+  /// `true` when the ad has a click destination.
   final bool isClickable;
 
   final Future<void> Function() _recordImpression;
   final Future<void> Function() _openClick;
   Future<void>? _impressionFuture;
 
+  /// Record the ad impression once, if it has not already been recorded.
   Future<void> recordImpression() {
     return _impressionFuture ??= Future<void>.sync(_recordImpression);
   }
 
+  /// Open the ad's click destination, throwing if the ad is not clickable.
   Future<void> openClick() async {
     if (!isClickable) {
       throw const RahaAdsException(
@@ -32,6 +41,7 @@ sealed class RahaAdResponse {
   }
 }
 
+/// A banner ad response returned by [RahaAdsense.adRequest].
 final class RahaBannerAdResponse extends RahaAdResponse {
   RahaBannerAdResponse._({
     required super.info,
@@ -88,6 +98,7 @@ final class RahaInterstitialAdResponse extends RahaAdResponse {
   }
 }
 
+/// A native ad response returned by [RahaAdsense.adRequest].
 final class RahaNativeAdResponse extends RahaAdResponse {
   RahaNativeAdResponse._({
     required super.info,

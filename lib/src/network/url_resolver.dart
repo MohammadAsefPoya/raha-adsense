@@ -1,6 +1,10 @@
 import '../config/raha_adsense_endpoints.dart';
 import '../errors/raha_adsense_exception.dart';
 
+/// Resolves ad asset and tracking URLs returned in ad responses.
+///
+/// Asset URLs may be relative paths that must be joined with the configured
+/// CDN origin, while tracking URLs may be relative to the API origin.
 final class RahaUrlResolver {
   const RahaUrlResolver(this.endpoints);
 

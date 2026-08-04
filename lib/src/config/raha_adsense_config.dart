@@ -3,12 +3,12 @@ import 'package:flutter/foundation.dart';
 import '../core/click_opener.dart';
 import 'raha_adsense_endpoints.dart';
 
+/// SDK configuration used to build the Raha network client.
 final class RahaAdsenseConfig {
   RahaAdsenseConfig.production({
     required this.appId,
     this.clickOpener,
-  })
-      : endpoints = RahaAdsenseEndpoints.production,
+  })  : endpoints = RahaAdsenseEndpoints.production,
         enableDebugLogs = kDebugMode,
         requestTimeout = const Duration(seconds: 9),
         inventoryTtl = const Duration(minutes: 5);

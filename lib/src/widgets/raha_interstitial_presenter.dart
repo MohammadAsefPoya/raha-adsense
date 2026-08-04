@@ -7,6 +7,11 @@ import '../core/viewability_policy.dart';
 import '../errors/raha_adsense_exception.dart';
 import '../models/ad_response.dart';
 
+/// A helper for presenting full-screen Raha interstitial ads.
+///
+/// Use [show] to display an interstitial response in a full-screen modal route.
+/// This helper ensures the ad impression is recorded only when the image is
+/// visible and the app is active.
 abstract final class RahaInterstitialPresenter {
   static Future<void> show({
     required BuildContext context,
@@ -122,6 +127,9 @@ class _RahaInterstitialRouteState extends State<_RahaInterstitialRoute>
 
   void _evaluateViewability() {
     if (_impressionRecorded) return;
+
+    // The interstitial impression is only recorded once the image has rendered,
+    // the view is visible enough, and the app is active.
     final qualified = _foreground &&
         _imageDecoded &&
         _visibleFraction >= bannerVisibleFraction;
