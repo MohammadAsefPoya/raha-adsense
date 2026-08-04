@@ -61,11 +61,18 @@ Dio buildRahaDio(RahaAdsenseConfig config) {
   return dio;
 }
 
+/// HTTP API client for Raha ad inventory, decision, and tracking endpoints.
+///
+/// This client centralizes request serialization, response validation, and
+/// retry behavior for the Raha SDK.
 final class RahaAdsenseApi {
   RahaAdsenseApi({required Dio dio}) : _dio = dio;
 
   final Dio _dio;
 
+  /// Fetch the publisher inventory from the Raha backend.
+  ///
+  /// This returns the configured list of apps, placements, and ad formats.
   Future<RahaInventoryResponse> fetchInventory({
     CancelToken? cancelToken,
   }) async {
@@ -84,6 +91,10 @@ final class RahaAdsenseApi {
     return RahaInventoryResponse.fromJson(json);
   }
 
+  /// Request a single ad decision for a placement.
+  ///
+  /// The request may return `null` when no ad is available for the
+  /// configured placement.
   Future<RahaAdDecisionDto?> requestAd({
     required String placementId,
     required Map<String, Object?> signals,
@@ -125,6 +136,7 @@ final class RahaAdsenseApi {
     }
   }
 
+  /// Track an ad impression by calling the provided impression URI.
   Future<RahaTrackingResult> trackImpression(
     Uri uri, {
     required String eventId,
@@ -139,6 +151,7 @@ final class RahaAdsenseApi {
     );
   }
 
+  /// Track an ad click URI, following redirects when necessary.
   Future<RahaTrackingResult> trackClick(
     Uri uri, {
     required String eventId,

@@ -10,6 +10,11 @@ import '../errors/raha_adsense_exception.dart';
 import '../models/ad_response.dart';
 import '../models/models.dart';
 
+/// A widget that displays a Raha banner ad.
+///
+/// The banner is loaded automatically when the widget is created. It tracks
+/// viewability before sending an impression event, and reports clicks via the
+/// configured click opener.
 class RahaBannerAd extends StatefulWidget {
   const RahaBannerAd({
     required this.size,
@@ -21,11 +26,22 @@ class RahaBannerAd extends StatefulWidget {
     this.onError,
   });
 
+  /// The requested banner size.
   final RahaBannerSize size;
+
+  /// Optional contextual signals that are sent with the ad request.
   final Map<String, Object?> signals;
+
+  /// Called when the banner ad is successfully loaded.
   final ValueChanged<RahaAdInfo>? onLoaded;
+
+  /// Called when the banner ad impression is recorded.
   final ValueChanged<RahaAdInfo>? onImpression;
+
+  /// Called when the banner ad is clicked.
   final ValueChanged<RahaAdInfo>? onClick;
+
+  /// Called when a banner ad fails to load or display.
   final ValueChanged<RahaAdsException>? onError;
 
   @override
@@ -192,6 +208,9 @@ class _RahaBannerAdState extends State<RahaBannerAd>
 
   void _evaluateViewability() {
     if (_impressionRecorded) return;
+
+    // Only record an impression when the ad is visible, decoded, and in
+    // the foreground for the configured duration.
     final qualified = _ad != null &&
         _imageDecoded &&
         _foreground &&

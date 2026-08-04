@@ -11,6 +11,10 @@ import '../errors/raha_adsense_exception.dart';
 import '../models/ad_response.dart';
 import '../models/models.dart';
 
+/// A widget that displays a Raha video ad.
+///
+/// The ad loads automatically and plays once it is ready. It tracks viewability
+/// before reporting an impression and supports tap-to-click behavior.
 class RahaVideoAd extends StatefulWidget {
   const RahaVideoAd({
     super.key,
@@ -22,11 +26,22 @@ class RahaVideoAd extends StatefulWidget {
     this.onError,
   });
 
+  /// Optional contextual signals sent with the video ad request.
   final Map<String, Object?> signals;
+
+  /// Called when the video ad has loaded successfully.
   final ValueChanged<RahaAdInfo>? onLoaded;
+
+  /// Called when the video ad impression has been recorded.
   final ValueChanged<RahaAdInfo>? onImpression;
+
+  /// Called when the video playback reaches completion.
   final ValueChanged<RahaAdInfo>? onCompleted;
+
+  /// Called when the user taps the video ad.
   final ValueChanged<RahaAdInfo>? onClick;
+
+  /// Called when there is an error loading, displaying, or tracking the ad.
   final ValueChanged<RahaAdsException>? onError;
 
   @override
@@ -193,6 +208,9 @@ class _RahaVideoAdState extends State<RahaVideoAd> with WidgetsBindingObserver {
 
   void _evaluateViewability() {
     if (_impressionRecorded) return;
+
+    // Record an impression only when the video is playing, visible enough, and
+    // the app is in the foreground.
     final controller = _controller;
     final value = controller?.value;
     final qualified = _ad != null &&

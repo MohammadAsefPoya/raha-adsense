@@ -10,6 +10,10 @@ import '../errors/raha_adsense_exception.dart';
 import '../models/ad_response.dart';
 import '../models/models.dart';
 
+/// A widget that displays a Raha native ad.
+///
+/// Native ads render title, description, images, and click behavior while
+/// preserving the app's existing layout and styling.
 class RahaNativeAd extends StatefulWidget {
   const RahaNativeAd({
     super.key,
@@ -20,10 +24,19 @@ class RahaNativeAd extends StatefulWidget {
     this.onError,
   });
 
+  /// Optional contextual signals included with the native ad request.
   final Map<String, Object?> signals;
+
+  /// Called when the native ad is loaded successfully.
   final ValueChanged<RahaAdInfo>? onLoaded;
+
+  /// Called when the native ad impression is recorded.
   final ValueChanged<RahaAdInfo>? onImpression;
+
+  /// Called when the native ad is clicked.
   final ValueChanged<RahaAdInfo>? onClick;
+
+  /// Called when the native ad cannot be loaded or displayed.
   final ValueChanged<RahaAdsException>? onError;
 
   @override
@@ -133,6 +146,9 @@ class _RahaNativeAdState extends State<RahaNativeAd>
 
   void _evaluateViewability() {
     if (_impressionRecorded) return;
+
+    // Only count the native impression after the primary image has rendered,
+    // the ad is visible enough, and the app is active.
     final qualified = _ad != null &&
         _foreground &&
         _primaryImageDecoded &&

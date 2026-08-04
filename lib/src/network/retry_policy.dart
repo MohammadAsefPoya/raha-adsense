@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 
+/// Execute a network action and retry once when retryable failures occur.
 Future<T> withOneRetry<T>(
   Future<T> Function() action, {
   CancelToken? cancelToken,

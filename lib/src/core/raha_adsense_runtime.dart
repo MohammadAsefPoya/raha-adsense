@@ -10,6 +10,10 @@ import '../network/raha_adsense_api.dart';
 import '../network/url_resolver.dart';
 import 'placement_registry.dart';
 
+/// Internal runtime for Raha Adsense.
+///
+/// This class is responsible for loading inventory, resolving placements,
+/// requesting ad decisions, and tracking impressions and clicks.
 final class RahaAdsenseRuntime {
   RahaAdsenseRuntime({
     required this.config,
@@ -28,11 +32,15 @@ final class RahaAdsenseRuntime {
   Future<PlacementRegistry>? _inventoryRefresh;
   bool _disposed = false;
 
+  /// Validate the configured app ID and load the placement registry.
+  ///
+  /// This method is called once during initial SDK setup.
   Future<void> initialize({CancelToken? cancelToken}) async {
     _validateAppId(config.appId);
     await _getRegistry(cancelToken: cancelToken, forceRefresh: true);
   }
 
+  /// Request a banner ad decision and convert it into a response object.
   Future<RahaBannerAdResponse?> requestBannerAd({
     required RahaBannerSize size,
     required Map<String, Object?> signals,
@@ -162,6 +170,11 @@ final class RahaAdsenseRuntime {
     );
   }
 
+  /// Return the cached placement registry, refreshing it when needed.
+  ///
+  /// The registry is refreshed when there is no cached version, when a full
+  /// refresh is requested, or when the cached inventory is older than the
+  /// configured TTL.
   Future<PlacementRegistry> _getRegistry({
     CancelToken? cancelToken,
     bool forceRefresh = false,
@@ -178,6 +191,10 @@ final class RahaAdsenseRuntime {
     );
   }
 
+  /// Refresh the placement registry by fetching inventory from the backend.
+  ///
+  /// If the app ID cannot be found or is configured multiple times, this
+  /// method throws a descriptive [RahaAdsException].
   Future<PlacementRegistry> _refreshRegistry(CancelToken? cancelToken) async {
     final inventory = await _api.fetchInventory(cancelToken: cancelToken);
     final matches = inventory.apps
@@ -228,6 +245,7 @@ final class RahaAdsenseRuntime {
     );
   }
 
+  /// Ensure the decision contains an image asset for the expected ad format.
   RahaImageAdAssetDto _requireImageAsset(
     RahaAdDecisionDto decision,
     RahaAdDecisionFormat format,
@@ -241,6 +259,7 @@ final class RahaAdsenseRuntime {
     return decision.asset as RahaImageAdAssetDto;
   }
 
+  /// Ensure the decision contains a video asset.
   RahaVideoAdAssetDto _requireVideoAsset(RahaAdDecisionDto decision) {
     if (decision.format != RahaAdDecisionFormat.video ||
         decision.asset is! RahaVideoAdAssetDto) {
@@ -252,6 +271,7 @@ final class RahaAdsenseRuntime {
     return decision.asset as RahaVideoAdAssetDto;
   }
 
+  /// Ensure the decision contains a native ad asset.
   RahaNativeAdAssetDto _requireNativeAsset(RahaAdDecisionDto decision) {
     if (decision.format != RahaAdDecisionFormat.native ||
         decision.asset is! RahaNativeAdAssetDto) {
@@ -263,17 +283,22 @@ final class RahaAdsenseRuntime {
     return decision.asset as RahaNativeAdAssetDto;
   }
 
+  /// Resolve an optional asset URL, returning `null` when the value is empty.
   Uri? _optionalAssetUrl(String value) {
     final normalized = value.trim();
     if (normalized.isEmpty) return null;
     return _resolver.resolveAsset(normalized);
   }
 
+  /// Trim optional text values and return `null` when the result is empty.
   String? _optionalText(String value) {
     final normalized = value.trim();
     return normalized.isEmpty ? null : normalized;
   }
 
+  /// Validate the click URL included in the ad decision.
+  ///
+  /// A valid click URL must be absolute HTTPS with no user info.
   void _validateClickUrl(String? value) {
     if (value == null) return;
     final Uri uri;
